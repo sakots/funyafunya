@@ -1,0 +1,2 @@
+# funyafunya
+MTG あいまいサーチ
