@@ -45,7 +45,7 @@ async def runner():
     await ws.send(json.dumps({
       "type": "connect",
       "body": {
-        "channel": "hybridTimeline",
+        "channel": "hybridTimeline", # すべてのイベントを受け取るチャンネル
         "id": "funyafunya" 
       }
     }))
@@ -63,6 +63,7 @@ async def runner():
         user = data['body']
         await on_follow(user)
 
+# メンションされたときの処理（メイン）
 async def on_note(note):
   if note.get('mentions'):
     if MY_ID in note['mentions']:
