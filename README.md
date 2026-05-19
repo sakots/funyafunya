@@ -12,7 +12,7 @@ pythonで動かします。
 pythonでインストール。
 
 ```python
-uv add websockets misskey.py python-dotenv
+uv add misskey.py websockets python-dotenv pillow requests
 ```
 
 `.env`ファイルを作成し、以下を用意します。
@@ -41,7 +41,7 @@ uv run python main.py
 ### [2026/05/19]
 
 - pythonをuvで3.14.5に固定
-- メンションしたら返事が来るようにまでできた
+- とりあえず実装
 
 ### [2026/05/18]
 
