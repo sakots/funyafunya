@@ -125,7 +125,7 @@ def extract_search_query(text):
   return ' '.join(text.split())
 
 def build_card_image_search_query(query):
-  return f'+{query} MTGカード'
+  return f'+{query} MTG カード'
 
 def search_bing_images(query):
   response = requests.get(
