@@ -11,14 +11,13 @@ from PIL import Image
 from dotenv import load_dotenv
 load_dotenv()
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
-GOOGLE_CUSTOM_SEARCH_URL = "https://www.googleapis.com/customsearch/v1"
+SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
+SERPAPI_SEARCH_URL = "https://serpapi.com/search.json"
 CARD_IMAGE_SEARCH_REQUIRED_TERMS = "(MTG OR マジック OR ギャザ) (カード OR card)"
-GOOGLE_DAILY_SEARCH_LIMIT = 99
-GOOGLE_USAGE_FILE = os.path.join(
+SERPAPI_MONTHLY_SEARCH_LIMIT = int(os.getenv("SERPAPI_MONTHLY_SEARCH_LIMIT", "250"))
+SERPAPI_USAGE_FILE = os.path.join(
   os.path.dirname(os.path.abspath(__file__)),
-  ".google_search_usage.json",
+  ".serpapi_search_usage.json",
 )
 REQUEST_HEADERS = {
   "User-Agent": "Mozilla/5.0 (compatible; funyafunya-bot/0.1)"
@@ -34,81 +33,102 @@ def build_card_image_search_query(query):
   return f"{query} {CARD_IMAGE_SEARCH_REQUIRED_TERMS}"
 
 def search_google_images(query, num=10):
-  if not GOOGLE_API_KEY:
-    raise ValueError("GOOGLE_API_KEY is not set")
-  if not GOOGLE_SEARCH_ENGINE_ID:
-    raise ValueError("GOOGLE_SEARCH_ENGINE_ID is not set")
+  if not SERPAPI_API_KEY:
+    raise ValueError("SERPAPI_API_KEY is not set")
 
-  reserve_google_search_quota()
+  ensure_serpapi_search_quota()
 
   response = requests.get(
-    GOOGLE_CUSTOM_SEARCH_URL,
+    SERPAPI_SEARCH_URL,
     params={
-      "key": GOOGLE_API_KEY,
-      "cx": GOOGLE_SEARCH_ENGINE_ID,
+      "api_key": SERPAPI_API_KEY,
+      "engine": "google_images",
       "q": query,
-      "searchType": "image",
-      "num": num,
+      "ijn": "0",
       "hl": "ja",
-      "lr": "lang_ja",
       "gl": "jp",
+      "google_domain": "google.co.jp",
       "safe": "active",
-      "imgType": "photo",
+      "device": "desktop",
     },
     headers=REQUEST_HEADERS,
     timeout=10,
   )
-  response.raise_for_status()
-
   data = response.json()
-  image_urls = [
-    item["link"]
-    for item in data.get("items", [])
-    if item.get("link", "").startswith(("http://", "https://"))
-  ]
+  raise_for_serpapi_error(response, data)
+  increment_serpapi_search_usage()
+
+  image_urls = extract_serpapi_image_urls(data)
 
   if not image_urls:
-    raise RuntimeError("No image URL found in Google image search result")
+    raise RuntimeError("No image URL found in SerpAPI Google Images result")
 
-  return list(dict.fromkeys(image_urls))
+  return list(dict.fromkeys(image_urls))[:num]
 
-def reserve_google_search_quota():
-  usage = load_google_search_usage()
-  today = date.today().isoformat()
-  count = usage["count"] if usage["date"] == today else 0
+def extract_serpapi_image_urls(data):
+  image_urls = []
+  for item in data.get("images_results", []):
+    for key in ("original", "thumbnail"):
+      image_url = item.get(key)
+      if image_url and image_url.startswith(("http://", "https://")):
+        image_urls.append(image_url)
 
-  if count >= GOOGLE_DAILY_SEARCH_LIMIT:
+  return image_urls
+
+def ensure_serpapi_search_quota():
+  usage = load_serpapi_search_usage()
+  current_month = usage_month()
+  count = usage["count"] if usage["month"] == current_month else 0
+
+  if count >= SERPAPI_MONTHLY_SEARCH_LIMIT:
     raise RuntimeError(
-      f"Google image search daily limit reached: {count}/{GOOGLE_DAILY_SEARCH_LIMIT}"
+      f"SerpAPI image search monthly limit reached: {count}/{SERPAPI_MONTHLY_SEARCH_LIMIT}"
     )
 
-  save_google_search_usage({
-    "date": today,
+def increment_serpapi_search_usage():
+  usage = load_serpapi_search_usage()
+  current_month = usage_month()
+  count = usage["count"] if usage["month"] == current_month else 0
+
+  save_serpapi_search_usage({
+    "month": current_month,
     "count": count + 1,
   })
 
-def load_google_search_usage():
+def raise_for_serpapi_error(response, data):
+  if response.ok and not data.get("error"):
+    return
+
+  message = data.get("error") or response.text
+  raise RuntimeError(
+    f"SerpAPI Google Images error: {response.status_code}: {message}"
+  )
+
+def load_serpapi_search_usage():
   try:
-    with open(GOOGLE_USAGE_FILE, "r", encoding="utf-8") as usage_file:
+    with open(SERPAPI_USAGE_FILE, "r", encoding="utf-8") as usage_file:
       usage = json.load(usage_file)
   except FileNotFoundError:
-    return {"date": date.today().isoformat(), "count": 0}
+    return {"month": usage_month(), "count": 0}
   except (json.JSONDecodeError, OSError):
-    return {"date": date.today().isoformat(), "count": 0}
+    return {"month": usage_month(), "count": 0}
 
   if not isinstance(usage, dict):
-    return {"date": date.today().isoformat(), "count": 0}
+    return {"month": usage_month(), "count": 0}
 
   return {
-    "date": str(usage.get("date", date.today().isoformat())),
+    "month": usage.get("month") or str(usage.get("date", usage_month()))[:7],
     "count": int(usage.get("count", 0)),
   }
 
-def save_google_search_usage(usage):
-  temp_file = f"{GOOGLE_USAGE_FILE}.tmp"
+def usage_month():
+  return date.today().strftime("%Y-%m")
+
+def save_serpapi_search_usage(usage):
+  temp_file = f"{SERPAPI_USAGE_FILE}.tmp"
   with open(temp_file, "w", encoding="utf-8") as usage_file:
     json.dump(usage, usage_file)
-  os.replace(temp_file, GOOGLE_USAGE_FILE)
+  os.replace(temp_file, SERPAPI_USAGE_FILE)
 
 def download_first_image(query):
   errors = []

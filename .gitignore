@@ -3,3 +3,4 @@
 __pycache__/
 *.pyc
 .google_search_usage.json
+.serpapi_search_usage.json
