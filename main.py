@@ -88,7 +88,8 @@ async def on_note(note):
         return
 
       try:
-        search_query = f'{query} MTG カード'
+        # Bing画像検索でMTGのカードっぽい画像を探す
+        search_query = f'{query} "MTG|マジック|ギャザ" "カード"'
         image_file = download_first_image(search_query)
         drive_file = msk.drive_files_create(
           image_file,
@@ -126,12 +127,13 @@ def extract_search_query(text):
 def search_bing_images(query):
   response = requests.get(
     BING_IMAGE_SEARCH_URL,
+    # 検索パラメーター
     params={
       "q": query,
       "form": "HDRSC2",
       "first": "1",
-      "qft": "+filterui:aspect-tall",
-      "safeSearch": "Moderate",
+      "qft": "+filterui:aspect-tall", # 縦長の画像に絞る
+      "safeSearch": "Moderate", # セーフサーチを適度に厳しく
     },
     headers=REQUEST_HEADERS,
     timeout=10,
