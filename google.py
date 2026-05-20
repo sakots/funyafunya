@@ -60,6 +60,20 @@ msk = Misskey(MISSKEY_URL, i=TOKEN)
 MY_ID = msk.i()["id"]
 
 async def runner():
+  reconnect_delay = 5
+  while True:
+    try:
+      await streaming_loop()
+      reconnect_delay = 5
+    except websockets.exceptions.ConnectionClosed as error:
+      print(f"websocket closed: {error}. reconnecting in {reconnect_delay}s")
+    except OSError as error:
+      print(f"websocket connection failed: {error}. reconnecting in {reconnect_delay}s")
+
+    await asyncio.sleep(reconnect_delay)
+    reconnect_delay = min(reconnect_delay * 2, 60)
+
+async def streaming_loop():
   async with websockets.connect(WS_URL) as ws:
     await ws.send(json.dumps({
       "type": "connect",

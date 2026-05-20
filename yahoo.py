@@ -61,6 +61,20 @@ async def runner():
   ws_url = build_streaming_url(misskey_url, TOKEN)
   setup_misskey(misskey_url)
 
+  reconnect_delay = 5
+  while True:
+    try:
+      await streaming_loop(ws_url)
+      reconnect_delay = 5
+    except websockets.exceptions.ConnectionClosed as error:
+      print(f"websocket closed: {error}. reconnecting in {reconnect_delay}s")
+    except OSError as error:
+      print(f"websocket connection failed: {error}. reconnecting in {reconnect_delay}s")
+
+    await asyncio.sleep(reconnect_delay)
+    reconnect_delay = min(reconnect_delay * 2, 60)
+
+async def streaming_loop(ws_url):
   async with websockets.connect(ws_url) as ws:
     await ws.send(json.dumps({
       "type": "connect",
